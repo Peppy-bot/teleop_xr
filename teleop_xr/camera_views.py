@@ -60,35 +60,28 @@ def build_camera_views_config(
     return config
 
 
+def _device_of(view) -> int | str | None:
+    # Handle both Pydantic model and dict
+    if hasattr(view, "device"):
+        return view.device
+    return view.get("device")
+
+
 def build_video_streams(camera_views: dict) -> dict:
     """
-    Returns { "streams": [{"id": <view_key>, "device": <device>}, ...] }
+    Returns { "streams": [{"id": <view_key>, "device": <device>}, ...] } for the views
+    read from a capture device. A view without one (its frames come from a video
+    source the embedder supplies) has no stream.
     Preserve stable order: head, wrist_left, wrist_right if present, then others alphabetically
     """
     order = ["head", "wrist_left", "wrist_right"]
-    streams = []
-
-    # First, add ordered known keys
-    for view_key in order:
-        if view_key in camera_views:
-            val = camera_views[view_key]
-            # Handle both Pydantic model and dict
-            if hasattr(val, "device"):
-                device = val.device
-            else:
-                device = val["device"]
-
-            streams.append({"id": view_key, "device": device})
-
-    # Then add any other keys alphabetically
     extra_keys = sorted([k for k in camera_views.keys() if k not in order])
-    for view_key in extra_keys:
-        val = camera_views[view_key]
-        if hasattr(val, "device"):
-            device = val.device
-        else:
-            device = val["device"]
+    ordered_keys = [k for k in order if k in camera_views] + extra_keys
 
-        streams.append({"id": view_key, "device": device})
+    streams = []
+    for view_key in ordered_keys:
+        device = _device_of(camera_views[view_key])
+        if device is not None:
+            streams.append({"id": view_key, "device": device})
 
     return {"streams": streams}

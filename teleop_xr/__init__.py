@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import os
 import math
 import socket
@@ -23,7 +24,7 @@ from teleop_xr.video_stream import (
     build_sources,
 )
 from teleop_xr.camera_views import build_video_streams
-from teleop_xr.config import TeleopSettings
+from teleop_xr.config import TeleopSettings, ViewConfig
 from teleop_xr.robot_vis import RobotVisModule
 
 TF_RUB2FLU = np.array([[0, 0, -1, 0], [-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]])
@@ -246,6 +247,12 @@ class Teleop:
         self.__video_streams: list[VideoStreamConfig] = []
         self.__video_sources: dict[str, VideoSource] = video_sources or {}
         self.__video_sessions: dict[WebSocket, VideoStreamManager] = {}
+        # Video sessions start one at a time: a page's own request and a
+        # source replacement never build two sessions for one socket at once.
+        self.__video_session_lock = asyncio.Lock()
+        # Replacements run one at a time: every page restarts on one
+        # replacement's sources before the next is told.
+        self.__video_replace_lock = asyncio.Lock()
 
         self.robot_vis: Optional[RobotVisModule] = None
         if self.__settings.robot_vis:
@@ -352,24 +359,61 @@ class Teleop:
     def clear_video_streams(self) -> None:
         self.__video_streams = []
 
+    async def replace_video_sources(
+        self,
+        video_sources: dict[str, VideoSource],
+        camera_views: Dict[str, ViewConfig],
+    ) -> None:
+        """Show `camera_views` on every page from now on, fed by `video_sources`.
+
+        Each page in session is told its views again and its video restarts on
+        the new tracks; a page that connects later is told them at connect. A
+        page whose video fails to restart loses its video session: it gets the
+        views when it connects again. Run it on the loop the server runs on.
+        """
+        async with self.__video_replace_lock:
+            self.__video_sources = dict(video_sources)
+            self.__settings.camera_views = dict(camera_views)
+            self.set_video_streams(build_video_streams(camera_views))
+            await self.__manager.broadcast(
+                json.dumps({"type": "config", "data": self.__settings.model_dump()})
+            )
+            for websocket in list(self.__video_sessions):
+                try:
+                    await self._start_video_session(websocket)
+                except Exception as e:
+                    self.__logger.warning(
+                        f"A page's video failed to restart on the new sources: {e!r}"
+                    )
+                    orphan = self.__video_sessions.pop(websocket, None)
+                    if orphan is not None:
+                        with contextlib.suppress(Exception):
+                            await orphan.close()
+
     async def _start_video_session(self, websocket: WebSocket) -> None:
-        sources = self.__video_sources
-        if not sources and self.__video_streams:
-            sources = build_sources(self.__video_streams)
+        async with self.__video_session_lock:
+            existing_session = self.__video_sessions.pop(websocket, None)
+            if existing_session is not None:
+                await existing_session.close()
 
-        existing_session = self.__video_sessions.pop(websocket, None)
-        if existing_session is not None:
-            await existing_session.close()
+            # Read once the old session closed: a replacement that landed
+            # during the close is what the new session is built from.
+            sources = self.__video_sources
+            if not sources and self.__video_streams:
+                sources = build_sources(self.__video_streams)
 
-        manager = VideoStreamManager(sources)
-        self.__video_sessions[websocket] = manager
-        offer = await manager.create_offer()
-        await self.__manager.send_personal_message(
-            json.dumps(
-                {"type": "video_offer", "data": {"sdp": offer.sdp, "type": offer.type}}
-            ),
-            websocket,
-        )
+            manager = VideoStreamManager(sources)
+            self.__video_sessions[websocket] = manager
+            offer = await manager.create_offer()
+            await self.__manager.send_personal_message(
+                json.dumps(
+                    {
+                        "type": "video_offer",
+                        "data": {"sdp": offer.sdp, "type": offer.type},
+                    }
+                ),
+                websocket,
+            )
 
     async def _handle_video_message(self, websocket: WebSocket, message: Any) -> None:
         msg_type = message.get("type")
@@ -521,6 +565,13 @@ class Teleop:
         @self.__app.get("/")
         async def index():
             return FileResponse(index_path)
+
+        @self.__app.get("/config")
+        async def config():
+            # The settings the socket sends at connect, over HTTP: the page
+            # lists its camera views as it loads, before a session opens
+            # the socket.
+            return self.__settings.model_dump()
 
         @self.__app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):

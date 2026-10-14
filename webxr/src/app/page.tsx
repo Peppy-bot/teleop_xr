@@ -2,12 +2,11 @@
 
 import { Glasses, Monitor, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
-import { AdvancedSettingsPanel } from "@/components/dashboard/AdvancedSettingsPanel";
+import { useCallback, useEffect, useState } from "react";
 import { CameraSettingsPanel } from "@/components/dashboard/CameraSettingsPanel";
-import { RobotSettingsPanel } from "@/components/dashboard/RobotSettingsPanel";
-import { TeleopPanel } from "@/components/dashboard/TeleopPanel";
+import { RobotPanel } from "@/components/dashboard/RobotPanel";
 import { Button } from "@/components/ui/button";
+import { loadServerConfig } from "@/lib/server_config";
 
 const XRScene = dynamic(
 	() => import("@/components/xr/XRScene").then((mod) => mod.XRScene),
@@ -19,6 +18,15 @@ export type XRMode = "vr" | "passthrough" | null;
 export default function Home() {
 	const [xrError, setXrError] = useState<string | null>(null);
 	const [selectedMode, setSelectedMode] = useState<XRMode>(null);
+
+	useEffect(() => {
+		loadServerConfig().catch((error) =>
+			console.warn(
+				"[Dashboard] the server's config could not be read; the camera feeds list once a session opens",
+				error,
+			),
+		);
+	}, []);
 
 	const handleEnterVR = useCallback(() => {
 		setXrError(null);
@@ -61,7 +69,7 @@ export default function Home() {
 									variant="default"
 								>
 									<Monitor className="h-4 w-4" />
-									VR Mode
+									Start
 								</Button>
 								<Button
 									size="lg"
@@ -70,7 +78,7 @@ export default function Home() {
 									variant="secondary"
 								>
 									<Glasses className="h-4 w-4" />
-									Passthrough
+									Start Passthrough
 								</Button>
 							</>
 						) : (
@@ -93,15 +101,9 @@ export default function Home() {
 					</div>
 				) : null}
 
-				<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-					<div className="space-y-6 lg:col-span-2">
-						<TeleopPanel />
-						<RobotSettingsPanel />
-					</div>
-					<div className="space-y-6">
-						<CameraSettingsPanel />
-						<AdvancedSettingsPanel />
-					</div>
+				<div className="grid gap-6">
+					<RobotPanel />
+					<CameraSettingsPanel />
 				</div>
 			</div>
 		</main>

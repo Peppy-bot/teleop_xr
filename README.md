@@ -10,6 +10,43 @@ guides and API references.
   <img src="./assets/teleop_xr.jpg" alt="TeleopXR Cover">
 </p>
 
+## This fork
+
+[Peppy's](https://github.com/Peppy-bot) fork of
+[qrafty-ai/teleop_xr](https://github.com/qrafty-ai/teleop_xr), the WebXR
+server behind the `xr_commander` headset node. The node reads the
+controller poses and buttons off the session and feeds the page's panels
+itself, so the fork changes what the page shows and how an embedder drives
+it:
+
+- The dashboard holds a **Robot** card and the camera feeds. The buttons
+  read **Start** and **Start Passthrough**. The teleoperation, robot model
+  and advanced settings cards are gone: they tune upstream's IK stack and
+  the page's robot model.
+- `GET /config` serves the settings the socket sends at connect, and the
+  page reads it as it loads: the camera feeds list the server's views
+  before a session opens the socket.
+- The Robot card reads `GET /robot` and posts a pick to `POST /robot`
+  (form field `robot`). The embedder serves the route: `GET` answers
+  `{"robots": [...], "chosen": "<name>" | null, "empty": "<text shown with
+  no robot on offer>"}`, `POST` 204, or 400 and the reason as text, which
+  the card shows. With no route (`GET` answers 404) the page shows no card.
+- `ViewConfig.raised` floats a view's panel above the row of the others,
+  and `device` is optional: a view fed by a video source the embedder
+  supplies has none, and `build_video_streams` skips it. With supplied
+  sources, every view's frames come from them.
+- `Teleop.replace_video_sources(video_sources, camera_views)` switches the
+  panels on every page: each page in session is told its views again and
+  its video restarts on the new tracks. Video sessions start one at a time.
+
+Push a tag (`v1.3.5.post1` after upstream's `v1.3.5`) and
+`.github/workflows/release.yml` builds the wheel, web app inside, and
+publishes it as the GitHub release; consumers pin
+`https://github.com/Peppy-bot/teleop_xr/releases/download/v1.3.5.post1/teleop_xr-1.3.5.post1-py3-none-any.whl`.
+Pull upstream with
+`git remote add upstream https://github.com/qrafty-ai/teleop_xr.git` once,
+then `git fetch upstream && git merge upstream/main`.
+
 ## Key Features
 
 - **🕶️ VR/Passthrough**: Seamlessly switch between fully immersive VR and
