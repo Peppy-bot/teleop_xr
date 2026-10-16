@@ -37,6 +37,7 @@ import { initConsoleStream } from "./console_stream";
 import { ControllerCameraPanelSystem } from "./controller_camera_system";
 import { GlobalRefs } from "./global_refs";
 import { PanelSystem } from "./panel";
+import { placeFloating } from "./panel_layout";
 import {
 	CameraPanel,
 	CameraPanelSystem,
@@ -262,8 +263,8 @@ export const initWorld = async (
 			}
 
 			const allKeys = Object.keys(config);
-			const reserved = ["wrist_left", "wrist_right"];
-			const floatingKeys = allKeys.filter((k) => !reserved.includes(k)).sort();
+			const places = placeFloating(config);
+			const floatingKeys = places.map((place) => place.key);
 
 			console.log(
 				"[Video] Updating camera panels. Config keys:",
@@ -272,7 +273,7 @@ export const initWorld = async (
 				floatingKeys,
 			);
 
-			floatingKeys.forEach((key, index) => {
+			for (const { key, x, y } of places) {
 				let panel = cameraPanels.get(key);
 				if (!panel) {
 					console.log(`[Video] Creating new CameraPanel for key: ${key}`);
@@ -290,23 +291,17 @@ export const initWorld = async (
 
 				panel.setLabel(`CAMERA: ${key.toUpperCase()}`);
 
-				// Calculate offset in arc or line
-				const spacing = 0.9;
-				const totalWidth = (floatingKeys.length - 1) * spacing;
-				const startX = -totalWidth / 2;
-				const xOffset = startX + index * spacing;
-
 				if (panel.entity.object3D) {
 					const cam = world.camera;
 					// Place relative to current camera
-					placeRelative(panel.entity.object3D, cam, xOffset, 0, -1.5);
+					placeRelative(panel.entity.object3D, cam, x, y, -1.5);
 					panel.faceUser();
 				} else {
 					console.error(
 						`[Video] panel entity/object3D missing for key: ${key}`,
 					);
 				}
-			});
+			}
 
 			for (const [key, panel] of Array.from(cameraPanels.entries())) {
 				if (!floatingKeys.includes(key)) {

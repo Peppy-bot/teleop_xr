@@ -10,10 +10,18 @@ class InputMode(str, Enum):
 
 
 class ViewConfig(BaseModel):
-    device: Union[int, str]
+    """One view the page shows as a panel.
+
+    `device` is the capture device the view's frames are read from; None for
+    a view fed by a video source the embedder supplies. A `raised` panel
+    floats above the row of the others.
+    """
+
+    device: Optional[Union[int, str]] = None
     width: int = 1280
     height: int = 720
     fps: int = 30
+    raised: bool = False
 
 
 class RobotVisConfig(BaseModel):

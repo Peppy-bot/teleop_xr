@@ -5,6 +5,7 @@ from teleop_xr.camera_views import (
     build_camera_views_config,
     build_video_streams,
 )
+from teleop_xr.config import ViewConfig
 
 
 def test_parse_device_spec_valid():
@@ -86,6 +87,18 @@ def test_build_camera_views_config_empty():
 
 def test_build_video_streams_empty():
     assert build_video_streams({}) == {"streams": []}
+
+
+def test_build_video_streams_skips_views_without_a_device():
+    # A view fed by a supplied video source has no device and no stream.
+    camera_views = {
+        "status": ViewConfig(raised=True),
+        "head": ViewConfig(device=0),
+        "chest": {"device": None},
+    }
+    assert build_video_streams(camera_views) == {
+        "streams": [{"id": "head", "device": 0}]
+    }
 
 
 def test_parse_device_spec_string_digits():

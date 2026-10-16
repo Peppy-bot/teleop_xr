@@ -1,12 +1,12 @@
 import { createSystem, Quaternion, Vector3, Visibility } from "@iwsdk/core";
 import { getClientId } from "../client_id";
+import { applyCameraViews } from "../lib/server_config";
 import {
 	type TeleopLifecycle,
 	type TeleopSettings,
 	type TeleopTelemetry,
 	useAppStore,
 } from "../lib/store";
-import { setCameraViewsConfig } from "./camera_views";
 import { GlobalRefs } from "./global_refs";
 import { RobotModelSystem } from "./robot_system";
 
@@ -82,12 +82,7 @@ export class TeleopSystem extends createSystem({}) {
 							speed: message.data.speed,
 						});
 					}
-					const cameraViews = message.data?.camera_views ?? null;
-					const availableCameraKeys = cameraViews
-						? Object.keys(cameraViews)
-						: [];
-					useAppStore.getState().setAvailableCameras(availableCameraKeys);
-					setCameraViewsConfig(cameraViews);
+					applyCameraViews(message.data?.camera_views);
 				} else if (message.type === "robot_config") {
 					this.setLifecycle("loading_robot");
 					const robotSystem = this.world.getSystem(RobotModelSystem);

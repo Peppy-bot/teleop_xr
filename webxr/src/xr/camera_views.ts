@@ -1,5 +1,8 @@
 export type CameraView = {
-	device: string;
+	/** The capture device the view is read from; null for a view fed by a video source the embedder supplies. */
+	device: string | number | null;
+	/** A raised panel floats above the row of the others. */
+	raised?: boolean;
 };
 
 export type CameraViewsConfig = Record<string, CameraView>;

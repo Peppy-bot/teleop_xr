@@ -9,8 +9,7 @@ Next.js App Router components. Split between dashboard (2D UI) and XR (3D scene)
 ```
 components/
 ├── dashboard/               # 2D UI panels (React)
-│   ├── TeleopPanel.tsx
-│   ├── RobotSettingsPanel.tsx
+│   ├── RobotPanel.tsx
 │   └── CameraSettingsPanel.tsx
 ├── ui/                      # Radix UI + Tailwind components
 │   ├── button.tsx
