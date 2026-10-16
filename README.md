@@ -39,10 +39,13 @@ it:
   panels on every page: each page in session is told its views again and
   its video restarts on the new tracks. Video sessions start one at a time.
 
-Push a tag (`v1.3.5.post1` after upstream's `v1.3.5`) and
+Push a tag carrying a local version label (`v1.3.5+peppy.1` is upstream's
+`v1.3.5` plus Peppy's first patch; the next is `+peppy.2`) and
 `.github/workflows/release.yml` builds the wheel, web app inside, and
-publishes it as the GitHub release; consumers pin
-`https://github.com/Peppy-bot/teleop_xr/releases/download/v1.3.5.post1/teleop_xr-1.3.5.post1-py3-none-any.whl`.
+publishes it as the GitHub release; consumers pin the wheel's URL,
+`https://github.com/Peppy-bot/teleop_xr/releases/download/v1.3.5+peppy.1/teleop_xr-1.3.5+peppy.1-py3-none-any.whl`,
+under a specifier on the public version (`>=1.3.5,<2`), as a local label
+is allowed in `==` alone.
 Pull upstream with
 `git remote add upstream https://github.com/qrafty-ai/teleop_xr.git` once,
 then `git fetch upstream && git merge upstream/main`.
