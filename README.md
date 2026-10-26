@@ -26,11 +26,15 @@ it:
 - `GET /config` serves the settings the socket sends at connect, and the
   page reads it as it loads: the camera feeds list the server's views
   before a session opens the socket.
-- The Robot card reads `GET /robot` and posts a pick to `POST /robot`
-  (form field `robot`). The embedder serves the route: `GET` answers
-  `{"robots": [...], "chosen": "<name>" | null, "empty": "<text shown with
-  no robot on offer>"}`, `POST` 204, or 400 and the reason as text, which
-  the card shows. With no route (`GET` answers 404) the page shows no card.
+- The Robot card reads `GET /robot`, follows `GET /robot/events`, and posts
+  a pick to `POST /robot` (form field `robot`). The embedder serves the
+  routes: `GET /robot` answers `{"robots": [{"name": "<name>", "state":
+  "<who holds it>"}, ...], "chosen": "<name>" | null, "empty": "<text shown
+  with no robot on offer>"}`, `GET /robot/events` is a stream of
+  server-sent events, each the same JSON, sent whenever it changes, and
+  `POST` answers 204, or 400 and the reason as text, which the card shows.
+  The card names each robot with its state when the state is not empty.
+  With no route (`GET /robot` answers 404) the page shows no card.
 - `ViewConfig.raised` floats a view's panel above the row of the others,
   and `device` is optional: a view fed by a video source the embedder
   supplies has none, and `build_video_streams` skips it. With supplied

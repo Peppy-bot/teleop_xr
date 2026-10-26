@@ -11,10 +11,16 @@ import {
 import {
 	chooseRobot,
 	fetchRobotChoice,
+	followRobotChoice,
+	offerLabel,
 	type RobotChoice,
 } from "@/lib/robot_choice";
 
-/** The robot the headset drives, chosen among the ones the server offers. */
+/**
+ * The robot the headset drives, chosen among the ones the server offers, each
+ * with who holds it. The card follows the server's event stream, so each
+ * change shows as it happens.
+ */
 export function RobotPanel() {
 	// undefined until the server answered; null when it offers no choice.
 	const [choice, setChoice] = useState<RobotChoice | null | undefined>(
@@ -27,14 +33,28 @@ export function RobotPanel() {
 
 	const refresh = useCallback(async () => {
 		try {
-			setChoice(await fetchRobotChoice());
+			const served = await fetchRobotChoice();
+			setChoice(served);
+			return served;
 		} catch (error) {
 			setNote(error instanceof Error ? error.message : String(error));
+			return undefined;
 		}
 	}, []);
 
 	useEffect(() => {
-		void refresh();
+		let stop: (() => void) | undefined;
+		let unmounted = false;
+		void refresh().then((served) => {
+			// A server that offers no choice has no stream to follow.
+			if (served && !unmounted) {
+				stop = followRobotChoice(setChoice, setNote);
+			}
+		});
+		return () => {
+			unmounted = true;
+			stop?.();
+		};
 	}, [refresh]);
 
 	const choose = async (name: string) => {
@@ -70,9 +90,9 @@ export function RobotPanel() {
 						onChange={(event) => void choose(event.target.value)}
 					>
 						{choice.chosen === null && <option value="">Choose a robot</option>}
-						{choice.robots.map((name) => (
-							<option key={name} value={name}>
-								{name}
+						{choice.robots.map((robot) => (
+							<option key={robot.name} value={robot.name}>
+								{offerLabel(robot)}
 							</option>
 						))}
 					</select>
