@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
 	chooseRobot,
+	type EventStream,
 	fetchRobotChoice,
+	followRobotChoice,
+	offerLabel,
 	parseRobotChoice,
+	ROBOT_EVENTS_PATH,
 	ROBOT_FIELD,
 	ROBOT_PATH,
+	type RobotChoice,
 } from "../lib/robot_choice";
 
 const answer = (status: number, body: unknown) =>
@@ -16,10 +21,17 @@ const answer = (status: number, body: unknown) =>
 		text: async () => String(body),
 	}) as Response;
 
-const OFFER = { robots: ["alpha", "bravo"], chosen: "alpha", empty: "none" };
+const OFFER: RobotChoice = {
+	robots: [
+		{ name: "alpha", state: "driven from this headset" },
+		{ name: "bravo", state: "leased by director_inst (tidy the table)" },
+	],
+	chosen: "alpha",
+	empty: "none",
+};
 
 describe("parseRobotChoice", () => {
-	it("reads the robots on offer, the chosen one and the empty text", () => {
+	it("reads the robots on offer with their states, the chosen one and the empty text", () => {
 		expect(parseRobotChoice(OFFER)).toEqual(OFFER);
 		expect(parseRobotChoice({ ...OFFER, chosen: null })).toEqual({
 			...OFFER,
@@ -32,6 +44,9 @@ describe("parseRobotChoice", () => {
 		{},
 		{ ...OFFER, robots: "alpha" },
 		{ ...OFFER, robots: [1] },
+		{ ...OFFER, robots: ["alpha"] },
+		{ ...OFFER, robots: [{ name: "alpha" }] },
+		{ ...OFFER, robots: [{ name: "alpha", state: 3 }] },
 		{ ...OFFER, chosen: 2 },
 		{ ...OFFER, empty: undefined },
 	])("refuses the malformed body %j", (body) => {
@@ -86,5 +101,52 @@ describe("chooseRobot", () => {
 			answer(400, "robot 'x' is not on offer")) as unknown as typeof fetch;
 
 		expect(await chooseRobot("x", fetchFn)).toBe("robot 'x' is not on offer");
+	});
+});
+
+describe("offerLabel", () => {
+	it("names a robot with its state, and alone when the state is empty", () => {
+		expect(offerLabel({ name: "alpha", state: "free" })).toBe("alpha: free");
+		expect(offerLabel({ name: "alpha", state: "" })).toBe("alpha");
+	});
+});
+
+describe("followRobotChoice", () => {
+	class FakeStream implements EventStream {
+		onmessage: ((event: MessageEvent<string>) => void) | null = null;
+		closed = false;
+
+		send(data: string) {
+			this.onmessage?.({ data } as MessageEvent<string>);
+		}
+
+		close() {
+			this.closed = true;
+		}
+	}
+
+	it("hands on each offer of the stream, and the reason of a malformed one", () => {
+		const opened: string[] = [];
+		const stream = new FakeStream();
+		const choices: RobotChoice[] = [];
+		const errors: string[] = [];
+		const stop = followRobotChoice(
+			(choice) => choices.push(choice),
+			(reason) => errors.push(reason),
+			(path) => {
+				opened.push(path);
+				return stream;
+			},
+		);
+
+		expect(opened).toEqual([ROBOT_EVENTS_PATH]);
+		stream.send(JSON.stringify(OFFER));
+		stream.send(JSON.stringify({ robots: ["alpha"] }));
+		expect(choices).toEqual([OFFER]);
+		expect(errors).toEqual([
+			`${ROBOT_EVENTS_PATH} answered with a malformed body`,
+		]);
+		stop();
+		expect(stream.closed).toBe(true);
 	});
 });
